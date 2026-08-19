@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — Serve isolated project-scoped visualizer APIs.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] `#/<project>/`, `#/<project>/<adw_id>`, and `#/<project>/<adw_id>/<phase_id>` load the intended sessions, trace, and phase, with all generated links percent-encoding and retaining the project segment.
 - [ ] Opening `#/` redirects to the default project reported by the server, while a former session-only hash is treated as a project route rather than silently showing a session from another project.

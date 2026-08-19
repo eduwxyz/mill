@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 — Navigate and inspect one named project in the browser.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] When more than one project is configured, the top bar offers a project picker whose entries show project names and current availability; opening it refreshes the project list without background availability polling.
 - [ ] Selecting an available project changes to that project's root hash route and displays its sessions without retaining the previously selected project's view state.

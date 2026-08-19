@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Resolve configured projects and their database availability; 02 — Make the legacy session API reusable without changing it.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] `GET /api/projects` returns every configured project's name, resolved database location, availability, latest availability error, and the configured default project without opening each database.
 - [ ] Each existing session endpoint is available below `/api/projects/:project/` with its current suffix and operates only on that project's database; an unknown project returns 404 and a known database that cannot open returns 503 with its retained error.
