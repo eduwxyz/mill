@@ -342,6 +342,48 @@ function markdownFiles(dir: string): string[] {
   return files;
 }
 
+function bunTestFiles(dir: string): string[] {
+  const files: string[] = [];
+  if (!existsSync(dir)) return files;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name === "dist" || entry.name.startsWith(".")) continue;
+    const file = join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...bunTestFiles(file));
+    else if (entry.isFile() && /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(entry.name)) files.push(file);
+  }
+  return files;
+}
+
+/**
+ * The ticket deliberately asks for a regression test, not merely behaviour
+ * covered by this external criterion.  Keep that test anchored to the actual
+ * resolver seam and its historical macOS /private input, then run Bun's suite
+ * in the Python wrapper so a text-only, non-runnable example cannot satisfy it.
+ */
+async function verifyFocusedLegacyRegressionTest(): Promise<void> {
+  const literal = "/private/var/tmp/mill.db";
+  const files = bunTestFiles(join(visualizerDir, "tests"));
+  const matchingFiles: string[] = [];
+  for (const file of files) {
+    const text = await Bun.file(file).text();
+    const usesLegacyResolver = /\bresolve(?:Projects|DbPath)\s*\(/.test(text);
+    const selectsPrivateDb = new RegExp(
+      `["']--db["'][\\s\\S]{0,600}["']${literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`,
+    ).test(text);
+    const assertsExactValue = /\bexpect\s*\([\s\S]{0,800}\)\s*\.\s*toBe\s*\(/.test(text) &&
+      text.includes(literal);
+    if (usesLegacyResolver && selectsPrivateDb && assertsExactValue) matchingFiles.push(file);
+  }
+  check(
+    matchingFiles.length > 0,
+    "a runnable focused Bun regression test that calls legacy resolution with --db /private/var/tmp/mill.db and asserts its exact result",
+    files.length === 0
+      ? "no Bun test files under apps/visualizer/tests"
+      : `no qualifying test; inspected ${files.map((file) => relative(visualizerDir, file)).join(", ")}`,
+    "apps/visualizer/tests legacy resolution regression",
+  );
+}
+
 function documentedConfiguration(text: string): boolean {
   const fencedJson = /```[^\n]*\n([\s\S]*?)```/g;
   for (const match of text.matchAll(fencedJson)) {
@@ -592,6 +634,11 @@ test("configured project resolution and retryable availability", async () => {
           env: { MILL_PROJECTS_CONFIG: undefined, MILL_DB: "/private/ignored-by-cli/mill.db" },
         },
         {
+          label: "exact /private --db regression",
+          argv: ["bun", "server/index.ts", "--db", "/private/var/tmp/mill.db"],
+          env: { MILL_PROJECTS_CONFIG: undefined, MILL_DB: undefined },
+        },
+        {
           label: "MILL_DB /private path",
           argv: ["bun", "server/index.ts"],
           env: { MILL_PROJECTS_CONFIG: undefined, MILL_DB: "/private/var/folders/mill-criterion/legacy.db" },
@@ -603,7 +650,9 @@ test("configured project resolution and retryable availability", async () => {
         },
       ];
       for (const legacy of legacyCases) {
-        const expected = await withRuntime(legacy.env, launchDir, () => legacyResolver(legacy.argv));
+        const expected = legacy.label === "exact /private --db regression"
+          ? "/private/var/tmp/mill.db"
+          : await withRuntime(legacy.env, launchDir, () => legacyResolver(legacy.argv));
         const actual = await resolveProjectSet(resolver, legacy.argv, legacy.env, launchDir, `legacy ${legacy.label}`);
         if (!actual) continue;
         check(
@@ -725,6 +774,7 @@ test("configured project resolution and retryable availability", async () => {
       }
     }
 
+    await verifyFocusedLegacyRegressionTest();
     await verifyDocumentation();
   } catch (error) {
     fail(
@@ -770,6 +820,24 @@ def main() -> int:
                     "ACCEPTANCE_RESULT": str(result_path),
                 }
             )
+            suite = subprocess.run(
+                ["bun", "test"],
+                cwd=VISUALIZER,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=15,
+                check=False,
+            )
+            if suite.returncode != 0:
+                detail = single_line(suite.stdout or suite.stderr or f"exit {suite.returncode}")
+                print(
+                    "expected focused Bun visualizer tests to exit 0, "
+                    f"found {detail}, at apps/visualizer/tests"
+                )
+                return 1
+
             completed = subprocess.run(
                 ["bun", "test", str(test_path)],
                 cwd=VISUALIZER,
@@ -777,7 +845,7 @@ def main() -> int:
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=45,
+                timeout=35,
                 check=False,
             )
 
@@ -818,7 +886,7 @@ def main() -> int:
                 return 1
             return 0
     except subprocess.TimeoutExpired:
-        print("expected criterion to finish within 45 seconds, found timeout, at temporary Bun test")
+        print("expected criterion to finish within 50 seconds, found timeout, at focused Bun tests or temporary Bun test")
         return 1
     except Exception as error:  # Criterion contract: readable error, no traceback.
         print(
