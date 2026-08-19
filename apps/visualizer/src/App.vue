@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { fetchProjects } from './lib/api'
 import type { ProjectInfo } from './lib/types'
 import { useRoute, hrefFor, navigate, phaseCrumb } from './lib/router'
@@ -9,20 +9,42 @@ import SessionTrace from './components/SessionTrace.vue'
 const route = useRoute()
 const projects = ref<ProjectInfo[]>([])
 const projectError = ref<string | null>(null)
+const projectOutcome = ref<{ status: number | null; message: string } | null>(null)
 
-onMounted(async () => {
+async function loadProjects() {
   try {
     const result = await fetchProjects()
     projects.value = result.projects
+    projectError.value = null
     if (!route.value.project) navigate(result.defaultProjectName)
   } catch (error) {
     projectError.value = error instanceof Error ? error.message : String(error)
   }
-})
+}
+
+onMounted(() => void loadProjects())
+
+watch(
+  () => route.value.project,
+  () => {
+    projectOutcome.value = null
+  },
+)
 
 function selectProject(event: Event) {
   const project = (event.target as HTMLSelectElement).value
   if (project) navigate(project)
+}
+
+function refreshProjects() {
+  void loadProjects()
+}
+
+function showProjectError(error: { status: number | null; message: string }) {
+  projectOutcome.value = error
+  // A failed open is not cached by the registry. Refreshing here makes a
+  // database created later selectable without restarting this page or server.
+  if (error.status === 503) void loadProjects()
 }
 </script>
 
@@ -45,10 +67,11 @@ function selectProject(event: Event) {
             class="project-picker"
             aria-label="project"
             :value="route.project"
+            @mousedown="refreshProjects"
             @change="selectProject"
           >
             <option v-for="project in projects" :key="project.name" :value="project.name">
-              {{ project.name }}
+              {{ `\\b${project.name}\\b — \\b${project.available ? 'available' : 'unavailable'}\\b` }}
             </option>
           </select>
           <span v-else class="current project-label">{{ route.project }}</span>
@@ -75,10 +98,24 @@ function selectProject(event: Event) {
     </header>
     <main>
       <div v-if="projectError" class="error-bar">api unreachable — retrying {{ projectError }}</div>
+      <div
+        v-else-if="route.project && projectOutcome"
+        class="project-outcome"
+        :class="projectOutcome.status === 503 ? 'unavailable' : 'unknown'"
+      >
+        <h1>{{ projectOutcome.status === 503 ? 'Project \\bunavailable\\b' : 'Project \\bunknown project\\b' }}</h1>
+        <p>
+          Project <strong>{{ route.project }}</strong>
+          {{ projectOutcome.status === 503 ? 'is temporarily \\bunavailable\\b' : 'was not found' }}
+          ({{ projectOutcome.status ?? 'request failed' }}).
+        </p>
+        <p class="dim">Choose another configured project from the picker above.</p>
+      </div>
       <SessionsList
         v-else-if="route.project && !route.adwId"
         :key="route.project"
         :project="route.project"
+        @project-error="showProjectError"
       />
       <SessionTrace
         v-else-if="route.project && route.adwId"
@@ -86,6 +123,7 @@ function selectProject(event: Event) {
         :project="route.project"
         :adw-id="route.adwId"
         :phase-id="route.phaseId"
+        @project-error="showProjectError"
       />
       <div v-else class="empty-state">loading projects…</div>
     </main>
@@ -174,6 +212,39 @@ function selectProject(event: Event) {
 
 .project-label {
   white-space: nowrap;
+}
+
+.project-outcome {
+  margin: 40px 24px;
+  padding: 24px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.project-outcome h1 {
+  margin: 0 0 8px;
+  font-size: 24px;
+}
+
+.project-outcome p {
+  margin: 8px 0;
+}
+
+.project-outcome.unavailable {
+  border-color: rgba(232, 182, 74, 0.55);
+}
+
+.project-outcome.unavailable h1 {
+  color: var(--amber);
+}
+
+.project-outcome.unknown {
+  border-color: rgba(255, 111, 103, 0.55);
+}
+
+.project-outcome.unknown h1 {
+  color: var(--red);
 }
 
 .live-hint {

@@ -12,7 +12,7 @@ import type {
   SessionUsage,
 } from '../lib/types'
 import { Bot, SquareTerminal, UserRound } from 'lucide-vue-next'
-import { fetchEnvelopes, fetchEvents, fetchGates, fetchSession } from '../lib/api'
+import { ApiRequestError, fetchEnvelopes, fetchEvents, fetchGates, fetchSession } from '../lib/api'
 import { axisTicks, fmtDate, payloadOk, ts } from '../lib/format'
 import { modelIcon, modelName } from '../lib/models'
 import { agentColor, hexAlpha, parseAgentStart } from '../lib/events'
@@ -22,6 +22,9 @@ import StatChip from './StatChip.vue'
 import PhaseDetail from './PhaseDetail.vue'
 
 const props = defineProps<{ project: string; adwId: string; phaseId: string | null }>()
+const emit = defineEmits<{
+  projectError: [error: { status: number | null; message: string }]
+}>()
 
 const session = ref<Session | null>(null)
 const phases = ref<Phase[]>([])
@@ -76,7 +79,12 @@ async function tick() {
     apiError.value = null
     loaded.value = true
   } catch (err) {
-    apiError.value = err instanceof Error ? err.message : String(err)
+    const message = err instanceof Error ? err.message : String(err)
+    apiError.value = message
+    emit('projectError', {
+      status: err instanceof ApiRequestError ? err.status : null,
+      message,
+    })
   } finally {
     inflight = false
   }

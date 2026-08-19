@@ -10,9 +10,19 @@ import type {
   SessionSummary,
 } from './types'
 
+export class ApiRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly url: string,
+  ) {
+    super(`GET ${url} → ${status}`)
+    this.name = 'ApiRequestError'
+  }
+}
+
 async function getJson(url: string): Promise<unknown> {
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`GET ${url} → ${res.status}`)
+  if (!res.ok) throw new ApiRequestError(res.status, url)
   return res.json()
 }
 

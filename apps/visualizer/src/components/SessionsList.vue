@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import type { SessionSummary } from '../lib/types'
-import { fetchSessions } from '../lib/api'
+import { ApiRequestError, fetchSessions } from '../lib/api'
 import { ts } from '../lib/format'
 import SessionCard from './SessionCard.vue'
 
 const props = defineProps<{ project: string }>()
+const emit = defineEmits<{
+  projectError: [error: { status: number | null; message: string }]
+}>()
 
 const sessions = shallowRef<SessionSummary[]>([])
 const apiError = ref<string | null>(null)
@@ -24,7 +27,12 @@ async function tick() {
     apiError.value = null
     loaded.value = true
   } catch (err) {
-    apiError.value = err instanceof Error ? err.message : String(err)
+    const message = err instanceof Error ? err.message : String(err)
+    apiError.value = message
+    emit('projectError', {
+      status: err instanceof ApiRequestError ? err.status : null,
+      message,
+    })
   } finally {
     inflight = false
   }
