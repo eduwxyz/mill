@@ -9,7 +9,7 @@ import StatusChip from './StatusChip.vue'
 import StatChip from './StatChip.vue'
 import PhaseDots from './PhaseDots.vue'
 
-const props = defineProps<{ session: SessionSummary; nowMs: number }>()
+const props = defineProps<{ project: string; session: SessionSummary; nowMs: number }>()
 const emit = defineEmits<{ archived: [adwId: string] }>()
 
 // The card is an <a>; the button lives inside it, so the click must not
@@ -20,7 +20,7 @@ async function archive(event: MouseEvent) {
   event.stopPropagation()
   emit('archived', props.session.adw_id)
   try {
-    await archiveSession(props.session.adw_id)
+    await archiveSession(props.project, props.session.adw_id)
   } catch {
     emit('archived', '')   // signals the parent to re-sync from the server
   }
@@ -47,7 +47,7 @@ async function pull() {
     do {
       // Cursor pagination is inherently sequential: each request needs the previous cursor.
       // oxlint-disable-next-line no-await-in-loop
-      page = await fetchEvents(props.session.adw_id, cursor, 1000)
+      page = await fetchEvents(props.project, props.session.adw_id, cursor, 1000)
       cursor = Math.max(cursor, page.cursor)
       fresh.push(...page.events)
     } while (page.has_more)
@@ -147,7 +147,7 @@ const rows = computed<TimelineRow[]>(() => {
   }
   if (running.value && latest) latest.latest = true
 
-  // /api/sessions embeds agents so the labels can use config colors with no
+  // The project-scoped sessions endpoint embeds agents so the labels can use config colors with no
   // extra request; historical sessions return color null → fallback palette.
   return owners.map((owner, i) => {
     const info = (props.session.agents ?? []).find((a) => a.agent === owner)
@@ -187,7 +187,7 @@ const hiddenRowCount = computed(() =>
 </script>
 
 <template>
-  <a class="card" :class="session.status" :href="hrefFor(session.adw_id)">
+  <a class="card" :class="session.status" :href="hrefFor(project, session.adw_id)">
     <button
       class="card-archive"
       type="button"

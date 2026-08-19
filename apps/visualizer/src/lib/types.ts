@@ -19,6 +19,8 @@ export type {
   AgentPrompts,
   PromptsResponse,
   HealthResponse,
+  ProjectInfo,
+  ProjectsResponse,
   SessionStatus,
   PhaseStatus,
   PhaseKind,

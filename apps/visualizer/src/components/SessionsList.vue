@@ -5,6 +5,8 @@ import { fetchSessions } from '../lib/api'
 import { ts } from '../lib/format'
 import SessionCard from './SessionCard.vue'
 
+const props = defineProps<{ project: string }>()
+
 const sessions = shallowRef<SessionSummary[]>([])
 const apiError = ref<string | null>(null)
 const loaded = ref(false)
@@ -17,7 +19,7 @@ async function tick() {
   if (inflight) return
   inflight = true
   try {
-    sessions.value = await fetchSessions()
+    sessions.value = await fetchSessions(props.project)
     nowMs.value = Date.now()
     apiError.value = null
     loaded.value = true
@@ -58,7 +60,8 @@ const ordered = computed(() =>
     <div v-if="ordered.length" class="cards">
       <SessionCard
         v-for="s in ordered"
-        :key="s.adw_id"
+        :key="`${props.project}:${s.adw_id}`"
+        :project="props.project"
         :session="s"
         :now-ms="nowMs"
         @archived="onArchived"
