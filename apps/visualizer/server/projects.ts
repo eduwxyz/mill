@@ -170,12 +170,22 @@ export function resolveProjects(argv: string[] = Bun.argv): ProjectResolution {
   };
 }
 
+export class UnknownProjectError extends Error {
+  readonly code = "PROJECT_NOT_FOUND";
+
+  constructor(readonly projectName: string) {
+    super(`unknown configured project "${projectName}"`);
+    this.name = "UnknownProjectError";
+  }
+}
+
 export class ProjectUnavailableError extends Error {
   readonly code = "PROJECT_UNAVAILABLE";
 
   constructor(readonly projectName: string, readonly location: string, cause?: unknown) {
+    const reason = cause instanceof Error ? `: ${cause.message}` : "";
     super(
-      `configured project "${projectName}" is unavailable; database does not exist at ${location}`,
+      `configured project "${projectName}" is unavailable; database does not exist at ${location}${reason}`,
       cause ? { cause } : undefined,
     );
     this.name = "ProjectUnavailableError";
@@ -203,6 +213,7 @@ function projectsFromInput(input: unknown): ResolvedProject[] {
 export class ProjectRegistry {
   private readonly projects: ResolvedProject[];
   private readonly openDatabases = new Map<string, MillDb>();
+  private readonly availabilityErrors = new Map<string, string>();
 
   constructor(input: unknown) {
     this.projects = projectsFromInput(input);
@@ -211,31 +222,37 @@ export class ProjectRegistry {
     }
   }
 
-  list(): Array<ResolvedProject & { available: boolean }> {
+  list(): Array<ResolvedProject & { available: boolean; availabilityError: string | null }> {
     return this.projects.map((project) => ({
       ...project,
       available: existsSync(project.location),
+      availabilityError: this.availabilityErrors.get(project.name) ?? null,
     }));
   }
 
   get(name: string): MillDb {
     const project = this.projects.find((candidate) => candidate.name === name);
     if (!project) {
-      throw new Error(`unknown configured project "${name}"`);
+      throw new UnknownProjectError(name);
     }
 
     const cached = this.openDatabases.get(name);
     if (cached) return cached;
     if (!existsSync(project.location)) {
-      throw new ProjectUnavailableError(project.name, project.location);
+      const error = new ProjectUnavailableError(project.name, project.location);
+      this.availabilityErrors.set(name, error.message);
+      throw error;
     }
 
     try {
       const database = new MillDb(project.location);
       this.openDatabases.set(name, database);
+      this.availabilityErrors.delete(name);
       return database;
-    } catch (error) {
-      throw new ProjectUnavailableError(project.name, project.location, error);
+    } catch (cause) {
+      const error = new ProjectUnavailableError(project.name, project.location, cause);
+      this.availabilityErrors.set(name, error.message);
+      throw error;
     }
   }
 

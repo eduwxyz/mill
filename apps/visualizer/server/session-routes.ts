@@ -1,5 +1,6 @@
 import { resolve, sep, join } from "node:path";
 import type { MillDb } from "./db.ts";
+import { ProjectUnavailableError, UnknownProjectError } from "./projects.ts";
 import type { AgentPrompts, ApiError, HealthResponse } from "../shared/types.ts";
 
 const DEFAULT_LIMIT = 500;
@@ -29,7 +30,12 @@ function safely(
       return await handler(req);
     } catch (error) {
       console.error(`[mill] ${req.method} ${new URL(req.url).pathname}:`, error);
-      return json({ error: (error as Error).message } satisfies ApiError, 500);
+      const status = error instanceof UnknownProjectError
+        ? 404
+        : error instanceof ProjectUnavailableError
+          ? 503
+          : 500;
+      return json({ error: (error as Error).message } satisfies ApiError, status);
     }
   };
 }
