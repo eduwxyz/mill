@@ -4,10 +4,11 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] A JSON configuration accepts unique URL-safe project names and exactly one `db` or `repo` location per project; repository locations resolve to the standard Mill database location, `~` expands, configuration-relative paths resolve from the configuration file, and an explicit default (or the first project) is selected deterministically.
 - [ ] `--projects` takes precedence over `MILL_PROJECTS_CONFIG`; with neither present, resolving the sole legacy project preserves the current `--db`, `MILL_DB`, and working-directory precedence and resolved database path.
+- [ ] A focused Bun regression test calls legacy resolution with `--db /private/var/tmp/mill.db` and asserts that it returns exactly `/private/var/tmp/mill.db` when no project configuration is selected; no `resolve()`, realpath, or `/private` normalization may alter that legacy result.
 - [ ] Malformed JSON, an empty project list, unsafe or duplicate names, an invalid default, and entries with both or neither location are rejected with an actionable configuration error rather than producing an ambiguous project set.
 - [ ] A registry lists configured names, resolved database locations, and file-based availability without opening databases; requesting an unknown name is distinguishable from requesting an unavailable configured database, and a later request can open a database created after an earlier failure.
 - [ ] The visualizer documents the JSON shape and project-selection invocation, and focused Bun tests cover configuration precedence, path interpretation, validation, legacy fallback, and retryable unavailable projects.

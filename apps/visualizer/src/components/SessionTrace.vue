@@ -12,7 +12,7 @@ import type {
   SessionUsage,
 } from '../lib/types'
 import { Bot, SquareTerminal, UserRound } from 'lucide-vue-next'
-import { fetchEnvelopes, fetchEvents, fetchGates, fetchSession } from '../lib/api'
+import { ApiRequestError, fetchEnvelopes, fetchEvents, fetchGates, fetchSession } from '../lib/api'
 import { axisTicks, fmtDate, payloadOk, ts } from '../lib/format'
 import { modelIcon, modelName } from '../lib/models'
 import { agentColor, hexAlpha, parseAgentStart } from '../lib/events'
@@ -21,7 +21,10 @@ import StatusChip from './StatusChip.vue'
 import StatChip from './StatChip.vue'
 import PhaseDetail from './PhaseDetail.vue'
 
-const props = defineProps<{ adwId: string; phaseId: string | null }>()
+const props = defineProps<{ project: string; adwId: string; phaseId: string | null }>()
+const emit = defineEmits<{
+  projectError: [error: { status: number | null; message: string }]
+}>()
 
 const session = ref<Session | null>(null)
 const phases = ref<Phase[]>([])
@@ -44,7 +47,7 @@ async function tick() {
   if (inflight) return
   inflight = true
   try {
-    const detail = await fetchSession(props.adwId)
+    const detail = await fetchSession(props.project, props.adwId)
     session.value = detail.session
     phases.value = detail.phases.toSorted((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
     agents.value = detail.agents
@@ -55,7 +58,7 @@ async function tick() {
     do {
       // Cursor pagination is inherently sequential: each request needs the previous cursor.
       // oxlint-disable-next-line no-await-in-loop
-      page = await fetchEvents(props.adwId, cursor, 1000)
+      page = await fetchEvents(props.project, props.adwId, cursor, 1000)
       cursor = Math.max(cursor, page.cursor)
       fresh.push(...page.events)
     } while (page.has_more)
@@ -64,7 +67,10 @@ async function tick() {
     // Envelopes and gates only gain rows around phase/agent boundaries — refetch
     // on those events instead of every tick.
     if (!loaded.value || fresh.some((e) => e.type !== null && SIDE_TABLE_TYPES.has(e.type))) {
-      const [env, g] = await Promise.all([fetchEnvelopes(props.adwId), fetchGates(props.adwId)])
+      const [env, g] = await Promise.all([
+        fetchEnvelopes(props.project, props.adwId),
+        fetchGates(props.project, props.adwId),
+      ])
       envelopes.value = env
       gates.value = g
     }
@@ -73,7 +79,12 @@ async function tick() {
     apiError.value = null
     loaded.value = true
   } catch (err) {
-    apiError.value = err instanceof Error ? err.message : String(err)
+    const message = err instanceof Error ? err.message : String(err)
+    apiError.value = message
+    emit('projectError', {
+      status: err instanceof ApiRequestError ? err.status : null,
+      message,
+    })
   } finally {
     inflight = false
   }
@@ -422,7 +433,7 @@ const sessionDurationMs = computed(() => {
 })
 
 function selectPhase(p: Phase) {
-  navigate(props.adwId, p.phase_id === props.phaseId ? null : p.phase_id)
+  navigate(props.project, props.adwId, p.phase_id === props.phaseId ? null : p.phase_id)
 }
 </script>
 
@@ -548,11 +559,12 @@ function selectPhase(p: Phase) {
 
     <PhaseDetail
       v-if="selectedPhase"
+      :project="props.project"
       :phase="selectedPhase"
       :events="events"
       :envelopes="envelopes"
       :gates="gates"
-      @close="navigate(props.adwId)"
+      @close="navigate(props.project, props.adwId)"
     />
   </div>
 </template>
