@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] With one supplied database, every existing unprefixed endpoint keeps its current path, request and response shape, status behavior, and archive semantics.
 - [ ] The session route group can be constructed and mounted in a Bun HTTP test with a temporary Mill database without starting a production listening server.

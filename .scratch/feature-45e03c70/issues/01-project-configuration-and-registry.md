@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** failed
 
 - [ ] A JSON configuration accepts unique URL-safe project names and exactly one `db` or `repo` location per project; repository locations resolve to the standard Mill database location, `~` expands, configuration-relative paths resolve from the configuration file, and an explicit default (or the first project) is selected deterministically.
 - [ ] `--projects` takes precedence over `MILL_PROJECTS_CONFIG`; with neither present, resolving the sole legacy project preserves the current `--db`, `MILL_DB`, and working-directory precedence and resolved database path.
