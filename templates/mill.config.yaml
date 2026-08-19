@@ -1,0 +1,227 @@
+# mill.config.yaml — the factory's agent roster. One agent, one prompt, one purpose.
+# v1 runs the Pi coding agent only; coding_agent: claude_code arrives in v2.
+defaults:
+  coding_agent: pi
+  # Everything on the Codex plan (OAuth), ZERO API keys. One provider only.
+  model: openai-codex/gpt-5.6-luna
+  thinking: medium                 # off | minimal | low | medium | high | xhigh | max
+  harness_engineering: []          # pi extensions loaded into the harness (-e)
+  # Roster-wide allowlist; any agent may override with its own list.
+  # NOTE: --tools filters extension and custom tools too, not just builtins. An agent
+  # whose harness_engineering extension registers a tool MUST name that tool in its own
+  # tools list — otherwise the extension loads and its tool is silently filtered out.
+  tools:
+    - read                         # read file contents
+    - bash                         # execute bash commands
+    - edit                         # find/replace edits
+    - write                        # create/overwrite files
+    - grep                         # search file contents  (pi default: OFF)
+    - find                         # find files by glob     (pi default: OFF)
+    - ls                           # list directories       (pi default: OFF)
+  # Off-limits to every agent that does not name them in its own `writes`.
+  # `tools` alone cannot protect these: bash runs `git checkout`, and write
+  # reaches any path. An agent must not be able to edit the machinery that
+  # decides whether its own work passed. Enforced in adw_modules/permissions.py.
+  #
+  # `writes:` per agent says what it may change IN THE REPO. It never restricts
+  # the session runtime under data_dir — context_handoff/, envelopes, prompts,
+  # raw output. Every agent can always write its own report; `writes: []` means
+  # read-only with respect to the repo, not mute.
+  protected_files:
+    - adws/adw_modules/
+    - adws/adw_mill_config/
+    - adws/adw_*.py
+    # The acceptance criterion is the builder's GRADER. Without this line, the
+    # shortest path to green is deleting the check that failed — and the run would
+    # have no way to tell "it fixed it" from "it removed the proof".
+    - tests/acceptance/
+  data_dir: adws/adw_data          # runtime home: {data_dir}/sessions/{adw_id}/{agent_name}/
+
+observability:
+  db: adws/adw_data/mill.db        # tracer writes here directly; the UI polls it
+  poll_ms: 500                     # visualizer live-poll cadence
+
+agents:
+  - name: builder
+    model: openai-codex/gpt-5.6-luna   # implementation is Luna
+    thinking: high
+    color: "#22d3ee"
+    purpose: Implement the plan exactly; report every changed file in the envelope.
+    prompt_engineering:
+      system: adws/adw_data/prompt_engineering/builder/system.md
+      user: adws/adw_data/prompt_engineering/builder/user.md
+    # No `writes` key: unrestricted, and the only agent that is. It still cannot
+    # touch defaults.protected_files — the builder does not get to edit its own grader.
+    tools:                         # the only agent that mutates the repo — everything on
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - edit
+      - write
+
+  - name: researcher_a
+    model: openai-codex/gpt-5.6-luna
+    thinking: high
+    color: "#38bdf8"
+    purpose: Study the idea against this repo and propose ONE concrete approach; never see the other head.
+    prompt_engineering:
+      system: adws/adw_data/prompt_engineering/researcher/system.md
+      user: adws/adw_data/prompt_engineering/researcher/user.md
+
+    writes: []
+    tools:
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - write
+      - web_search             # search, with sources
+      - fetch_content          # URL, GitHub repo, PDF, video → markdown
+      - source_check           # checks a claim and returns the PASSAGE
+      - get_search_content     # re-reads what was already fetched, without paying again
+
+  - name: researcher_b
+    # ANOTHER FAMILY, not another size. Luna vs Terra disagreed by scale;
+    # Claude vs GPT disagree by how they were trained, and that is the divergence
+    # worth having. It goes out through the bridge, on the Claude plan — cost shows
+    # up ESTIMATED.
+    model: claude-bridge/claude-sonnet-5
+    thinking: high
+    color: "#f97316"
+    purpose: Same contract as researcher_a, different model; the disagreement between them is the product.
+    prompt_engineering:
+      system: adws/adw_data/prompt_engineering/researcher/system.md
+      user: adws/adw_data/prompt_engineering/researcher/user.md
+
+    writes: []
+    tools:
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - write
+      - web_search             # search, with sources
+      - fetch_content          # URL, GitHub repo, PDF, video → markdown
+      - source_check           # checks a claim and returns the PASSAGE
+      - get_search_content     # re-reads what was already fetched, without paying again
+
+  - name: architect
+    # The hardest judgement in the chain: it settles the divergences and chooses
+    # what goes up to the engineer. Opus on the plan, with effort at the ceiling.
+    model: claude-bridge/claude-opus-5
+    thinking: xhigh
+    color: "#c084fc"
+    purpose: Read both research files, propose the design, and name what only the engineer can answer.
+    prompt_engineering:
+      system: adws/adw_data/prompt_engineering/architect/system.md
+      user: adws/adw_data/prompt_engineering/architect/user.md
+
+    writes: []
+    tools:
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - write
+      - web_search             # search, with sources
+      - fetch_content          # URL, GitHub repo, PDF, video → markdown
+      - source_check           # checks a claim and returns the PASSAGE
+      - get_search_content     # re-reads what was already fetched, without paying again
+
+  - name: speccer
+    model: openai-codex/gpt-5.6-terra
+    thinking: high
+    color: "#34d399"
+    purpose: Synthesize a decided design into a spec; never interview, never decide.
+    prompt_engineering:
+      system: adws/adw_data/prompt_engineering/speccer/system.md
+      user: adws/adw_data/prompt_engineering/speccer/user.md
+    writes:
+      - .scratch/
+    tools:
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - write
+
+  - name: slicer
+    model: openai-codex/gpt-5.6-terra
+    thinking: high
+    color: "#facc15"
+    purpose: Break a spec into tracer-bullet tickets with honest blocking edges; build nothing.
+    prompt_engineering:
+      system: adws/adw_data/prompt_engineering/slicer/system.md
+      user: adws/adw_data/prompt_engineering/slicer/user.md
+    writes:                        # the tickets and nothing else
+      - .scratch/
+    tools:
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - write
+
+  - name: gatekeeper
+    model: openai-codex/gpt-5.6-terra
+    thinking: xhigh
+    color: "#ef4444"
+    purpose: Make the ticket's checkboxes executable before any implementation exists; build nothing.
+    prompt_engineering:
+      system: adws/adw_data/prompt_engineering/gatekeeper/system.md
+      user: adws/adw_data/prompt_engineering/gatekeeper/user.md
+    writes:                        # the criterion only — it does not build what it grades
+      - tests/acceptance/
+    tools:
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - write
+
+  - name: critic
+    # Opus at the ceiling: reading 6,000 lines and seeing what SEVEN reviewers did
+    # not see, each looking at their own ticket, is the broadest judgement in the
+    # house. It goes out on the Claude plan.
+    model: claude-bridge/claude-opus-5
+    thinking: xhigh
+    color: "#f472b6"
+    purpose: Read the whole feature at once and name what went crooked; never fix anything.
+    prompt_engineering:
+      system: adws/adw_data/prompt_engineering/critic/system.md
+      user: adws/adw_data/prompt_engineering/critic/user.md
+    writes:                        # the report and nothing else — fixing is a ticket
+      - .scratch/
+    tools:
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - write
+
+  - name: reviewer
+    model: openai-codex/gpt-5.6-luna   # adversarial review
+    thinking: xhigh
+    color: "#fb7185"
+    purpose: Confirm that what was built is what was asked for; change nothing.
+    prompt_engineering:
+      system: adws/adw_data/prompt_engineering/reviewer/system.md
+      user: adws/adw_data/prompt_engineering/reviewer/user.md
+    writes: []                     # a reviewer that cannot fix cannot quietly fix — the
+                                   # claim the tool list only implied, now enforced
+    tools:                         # full read surface; write only for review.md, no edit
+      - read
+      - grep
+      - find
+      - ls
+      - bash
+      - write

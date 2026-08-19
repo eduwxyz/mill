@@ -1,0 +1,11 @@
+# Python bytecode from importing adw_modules during a test run
+__pycache__/
+*.pyc
+
+# The visualizer's dependencies and build cache
+node_modules/
+.vite/
+dist/
+
+# Never in the skill itself — but a stray copy would be secrets
+.env
