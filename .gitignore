@@ -9,3 +9,7 @@ dist/
 
 # Never in the skill itself — but a stray copy would be secrets
 .env
+
+# mill runtime
+adws/adw_data/sessions/
+adws/adw_data/mill.db*
