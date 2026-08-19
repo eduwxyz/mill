@@ -13,7 +13,7 @@
  */
 import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { createSessionRoutes } from "./session-routes.ts";
+import { createProjectRoutes } from "./api.ts";
 import { ProjectRegistry, resolveProjects } from "./projects.ts";
 
 const PORT = Number(process.env.PORT ?? 4600);
@@ -35,11 +35,6 @@ if (!configSelected) {
     process.exit(1);
   }
 }
-
-function selectedProject(req: Request): string {
-  return new URL(req.url).searchParams.get("project") ?? projectResolution.defaultProjectName;
-}
-
 
 function notFound(message: string): Response {
   return new Response(JSON.stringify({ error: message }), {
@@ -84,15 +79,7 @@ async function serveStatic(req: Request): Promise<Response> {
 
 const server = Bun.serve({
   port: PORT,
-  routes: {
-    "/api/projects": () => new Response(JSON.stringify(projectRegistry.list()), {
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-        "cache-control": "no-store",
-      },
-    }),
-    ...createSessionRoutes((req) => projectRegistry.get(selectedProject(req))).routes,
-  },
+  routes: createProjectRoutes(projectRegistry, projectResolution).routes,
 
   fetch(req) {
     const { pathname } = new URL(req.url);
