@@ -163,8 +163,10 @@ def _run(spec: QualityCheckSpec, run) -> QualityCheckResult:
 # DETECTED from the repository itself (detect.py) — the engineer should not have
 # to write out the test command of a project that already announces it.
 OVERRIDES: dict[str, list[str]] = {
-    # "test": ["bun", "test"],
-    # "lint": ["ruff", "check", "."],
+    # This project exposes its JavaScript package below the repository root,
+    # so automatic detection cannot see its package.json. The build includes
+    # the Vue typecheck and is the project-wide check every ticket must pass.
+    "test": ["bun", "run", "--cwd=apps/visualizer", "build"],
 }
 
 # The FACTORY'S OWN suite, which detection does not find (and must not find:
