@@ -8,23 +8,36 @@
  *
  *   bun run server/index.ts
  *   bun run server/index.ts --db /path/to/repo/adws/adw_data/mill.db
+ *   bun run server/index.ts --projects /path/to/projects.json
  *   MILL_DB=/path/to/mill.db PORT=4600 bun run server/index.ts
  */
 import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { MillDb, resolveDbPath } from "./db.ts";
 import { createSessionRoutes } from "./session-routes.ts";
+import { ProjectRegistry, resolveProjects } from "./projects.ts";
 
 const PORT = Number(process.env.PORT ?? 4600);
 const DIST_DIR = resolve(import.meta.dir, "..", "dist");
+const projectResolution = resolveProjects();
+const projectRegistry = new ProjectRegistry(projectResolution);
+const configSelected = Bun.argv.includes("--projects") ||
+  Bun.argv.some((arg) => arg.startsWith("--projects=")) ||
+  process.env.MILL_PROJECTS_CONFIG !== undefined;
 
-const dbPath = resolveDbPath();
-let db: MillDb;
-try {
-  db = new MillDb(dbPath);
-} catch (error) {
-  console.error(`[mill] ${(error as Error).message}`);
-  process.exit(1);
+// Preserve the legacy startup failure for a single missing database. A
+// configured set is different: its unavailable entries remain visible and are
+// opened lazily when requested.
+if (!configSelected) {
+  try {
+    projectRegistry.get(projectResolution.defaultProjectName);
+  } catch (error) {
+    console.error(`[mill] ${(error as Error).message}`);
+    process.exit(1);
+  }
+}
+
+function selectedProject(req: Request): string {
+  return new URL(req.url).searchParams.get("project") ?? projectResolution.defaultProjectName;
 }
 
 
@@ -71,7 +84,15 @@ async function serveStatic(req: Request): Promise<Response> {
 
 const server = Bun.serve({
   port: PORT,
-  routes: createSessionRoutes(() => db).routes,
+  routes: {
+    "/api/projects": () => new Response(JSON.stringify(projectRegistry.list()), {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    }),
+    ...createSessionRoutes((req) => projectRegistry.get(selectedProject(req))).routes,
+  },
 
   fetch(req) {
     const { pathname } = new URL(req.url);
@@ -89,7 +110,11 @@ const server = Bun.serve({
 });
 
 console.log(`[mill] visualizer api  http://localhost:${server.port}`);
-console.log(`[mill] db              ${db.path}  [journal_mode=${db.journalMode}]`);
+const selected = projectResolution.projects.find(
+  (project) => project.name === projectResolution.defaultProjectName,
+);
+console.log(`[mill] projects        ${projectResolution.projects.map((project) => project.name).join(", ")}`);
+console.log(`[mill] default project  ${projectResolution.defaultProjectName} (${selected?.location})`);
 console.log(
   existsSync(DIST_DIR)
     ? `[mill] serving ui from  ${DIST_DIR}`
@@ -97,6 +122,6 @@ console.log(
 );
 
 process.on("SIGINT", () => {
-  db.close();
+  projectRegistry.close();
   process.exit(0);
 });
