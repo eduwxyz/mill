@@ -33,6 +33,7 @@ import StatChip from './StatChip.vue'
 import DetailSection from './DetailSection.vue'
 
 const props = defineProps<{
+  project: string
   phase: Phase
   events: EventRow[]
   envelopes: Envelope[]
@@ -299,7 +300,7 @@ watch(
     }
     promptsState.value = 'loading'
     try {
-      const result = await fetchPrompts(adwId, owner)
+      const result = await fetchPrompts(props.project, adwId, owner)
       promptCache.set(key, result)
       prompts.value = result
       promptsState.value = 'ready'

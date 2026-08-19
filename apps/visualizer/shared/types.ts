@@ -225,6 +225,20 @@ export interface ToolCallPayload {
 
 // ── API responses ────────────────────────────────────────────────────────────
 
+/** A configured visualizer project. */
+export interface ProjectInfo {
+  name: string;
+  location: string;
+  available: boolean;
+  availabilityError: string | null;
+}
+
+/** GET /api/projects */
+export interface ProjectsResponse {
+  projects: ProjectInfo[];
+  defaultProjectName: string;
+}
+
 /** GET /api/sessions */
 export type SessionsResponse = SessionSummary[];
 

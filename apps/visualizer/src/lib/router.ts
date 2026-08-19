@@ -1,7 +1,9 @@
 import { ref } from 'vue'
 
-// Hash routes: #/ → sessions · #/<adw_id> → waterfall · #/<adw_id>/<phase_id> → phase panel open
+// Hash routes: #/<project>/ → sessions · #/<project>/<adw_id> → waterfall
+// · #/<project>/<adw_id>/<phase_id> → phase panel open.
 export interface Route {
+  project: string | null
   adwId: string | null
   phaseId: string | null
 }
@@ -12,7 +14,11 @@ function parse(): Route {
     .split('/')
     .filter(Boolean)
     .map(decodeURIComponent)
-  return { adwId: parts[0] ?? null, phaseId: parts[1] ?? null }
+  return {
+    project: parts[0] ?? null,
+    adwId: parts[1] ?? null,
+    phaseId: parts[2] ?? null,
+  }
 }
 
 const route = ref<Route>(parse())
@@ -29,13 +35,22 @@ export function useRoute() {
 // since the phase_id in the URL is not the display name.
 export const phaseCrumb = ref<string | null>(null)
 
-export function hrefFor(adwId?: string | null, phaseId?: string | null): string {
+export function hrefFor(
+  project?: string | null,
+  adwId?: string | null,
+  phaseId?: string | null,
+): string {
   let h = '#/'
-  if (adwId) h += encodeURIComponent(adwId)
-  if (adwId && phaseId) h += `/${encodeURIComponent(phaseId)}`
+  if (project) h += `${encodeURIComponent(project)}/`
+  if (project && adwId) h += encodeURIComponent(adwId)
+  if (project && adwId && phaseId) h += `/${encodeURIComponent(phaseId)}`
   return h
 }
 
-export function navigate(adwId?: string | null, phaseId?: string | null): void {
-  window.location.hash = hrefFor(adwId, phaseId)
+export function navigate(
+  project?: string | null,
+  adwId?: string | null,
+  phaseId?: string | null,
+): void {
+  window.location.hash = hrefFor(project, adwId, phaseId)
 }
