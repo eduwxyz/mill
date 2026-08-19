@@ -236,10 +236,34 @@ just sessions
 
 ### The optional visualizer
 
+For one target repository, the legacy selector still works: `--db` takes
+precedence over `MILL_DB`, followed by the working-directory database.
+
+For several repositories, put a project set in a JSON file:
+
+```json
+{
+  "default": "mill",
+  "projects": [
+    { "name": "mill", "repo": "~/dev/mill" },
+    { "name": "other-project", "db": "../other/adws/adw_data/mill.db" }
+  ]
+}
+```
+
+Each project name is a unique URL-safe segment and has exactly one `db` or
+`repo` location. Relative locations are relative to the configuration file;
+`repo` locations resolve to `adws/adw_data/mill.db`. Select the file with
+`--projects /path/to/projects.json`, or set `MILL_PROJECTS_CONFIG` (the command
+line option wins). The explicit `default` is used when present; otherwise the
+first project is the default.
+
 ```bash
 cd ~/.claude/skills/mill/apps/visualizer
 bun install
-MILL_DB=~/dev/your-project/adws/adw_data/mill.db bun run dev:all
+bun run dev:all --projects ~/.config/mill/projects.json
+# equivalent environment selection:
+MILL_PROJECTS_CONFIG=~/.config/mill/projects.json bun run dev:all
 ```
 
 It is read-only and polls the same SQLite database `just sessions` reads. The db
